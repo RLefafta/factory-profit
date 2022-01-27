@@ -1,53 +1,157 @@
 from pulp import *
 import parameters
+import pandas as pd
+from IPython.display import display
 
 
 class Model:
     def __init__(self):
         self.model = LpProblem(name="planning_usine", sense=LpMaximize)
+        self.mois = parameters.mois
+        self.produits = parameters.produits
 
-    def _creation_variable_decision(self, mois: list, produits: list, invente_max: int):
+    def _creation_variable_decision(self, invente_max: int):
         self.variable_production = LpVariable.dicts(
-            "production", (mois, produits), 0, cat="Integer"
+            "production", (self.mois, self.produits), 0, cat="Integer"
         )
 
         self.variable_vendu = LpVariable.dicts(
-            "vendu", (mois, produits), 0, cat="Integer"
+            "vendu", (self.mois, self.produits), 0, cat="Integer"
         )
 
         self.variable_stock = LpVariable.dicts(
-            "stock", (mois, produits), 0, invente_max, cat="Integer"
+            "stock", (self.mois, self.produits), 0, invente_max, cat="Integer"
         )
 
-    def _fonction_objectif(
-        self, profit: dict, produits: list, mois: list, cout_stockage: int
-    ):
+    def _fonction_objectif(self, profit: dict, cout_stockage: int):
         self.model += lpSum(
             [
                 profit[produit] * self.variable_vendu[m][produit]
                 - self.variable_stock[m][produit] * cout_stockage
-                for produit in produits
-                for m in mois
+                for produit in self.produits
+                for m in self.mois
             ]
         )
         return self.model
 
-    def _vente_max_mois(self, ventes_max: dict, mois: list, produits: list):
+    def _vente_max_mois(self, ventes_max: dict):
         """
         Vente maximum par mois pour chaques produits
         """
         itr = iter(ventes_max.values())
-        for m in mois:
-            for produit in produits:
+        for m in self.mois:
+            for produit in self.produits:
                 self.model += self.variable_vendu[m][produit] <= next(itr)
 
-    def _balance_initial(self, produits: list, mois: list):
+    def _balance_initial(self):
         """
         Balance pour le premier mois
         """
-        for produit in produits:
+        for produit in self.produits:
             self.model += (
-                self.variable_production[mois[0]][produit]
-                == self.variable_vendu[mois[0]][produit]
-                + self.variable_stock[mois[0]][produit]
+                self.variable_production[self.mois[0]][produit]
+                == self.variable_vendu[self.mois[0]][produit]
+                + self.variable_stock[self.mois[0]][produit]
             )
+
+    def _balance(self):
+        """
+        Balance pour les autres mois
+        """
+        for m in self.mois:
+            if m != self.mois[0]:
+                for produit in self.produits:
+                    self.model += (
+                        self.variable_production[m][produit]
+                        + self.variable_stock[self.mois[self.mois.index(m) - 1]][
+                            produit
+                        ]
+                        == self.variable_vendu[m][produit]
+                        + self.variable_stock[m][produit]
+                    )
+
+    def _objectif_stock(self, objectif_stock: int):
+        """
+        Objectif de stock pour la fin de l'exercice
+        """
+        for produit in self.produits:
+            self.model += self.variable_stock[self.mois[-1]][produit] == objectif_stock
+
+    def _contrainte_machines(
+        self,
+        machines: list,
+        temps_utilisation: dict,
+        heures_travaille: str,
+        machines_dispo: dict,
+        maintenance: dict,
+    ):
+        """
+        Contrainte d'utilisation des machines
+        """
+        for m in self.mois:
+            for machine in machines:
+                self.model += lpSum(
+                    [
+                        self.variable_production[m][temp]
+                        * temps_utilisation[machine][temp]
+                        for temp in temps_utilisation[machine]
+                    ]
+                ) <= heures_travaille * (
+                    machines_dispo[machine] - maintenance.get((m, machine), 0)
+                )
+
+    def _creation_contrainte(self):
+        """
+        Ajout des différentes contraintes à notre modèle
+        """
+        self._vente_max_mois()
+        self._balance_initial()
+        self._balance()
+        self._objectif_stock()
+        self._contrainte_machines()
+
+    def _resultat(self):
+        """
+        Résous le problème d'optimisation
+        """
+        self.model.solve()
+
+    def _gain(self):
+        """
+        Indique le profit réalisé sur l'exercice
+        """
+        self._resultat()
+        if self.model.status == LpStatusOptimal:
+            print("Le profit total est de {}".format(value(self.model.objective)))
+        else:
+            print("Erreur")
+
+    def affichage(self):
+        """
+        Affichage profit + tableaux affichant pour chaque mois et chaque produits la production, la vente et le stock.
+        """
+        self._gain()
+        ligne = self.mois.copy()
+        colonne = self.produits.copy()
+        production_plan = pd.DataFrame(columns=colonne, index=ligne, data=0.0)
+        vendu_plan = pd.DataFrame(columns=colonne, index=ligne, data=0.0)
+        stock_plan = pd.DataFrame(columns=colonne, index=ligne, data=0.0)
+        for m in self.mois:
+            for produit in self.produits:
+                production_plan.loc[m][produit] = self.variable_production[m][
+                    produit
+                ].varValue
+                vendu_plan.loc[m][produit] = self.variable_vendu[m][produit].varValue
+                stock_plan.loc[m][produit] = self.variable_stock[m][produit].varValue
+        production_plan.style.set_table_attributes(
+            "style='display:inline'"
+        ).set_caption("Plan de production")
+        vendu_plan.style.set_table_attributes("style='display:inline'").set_caption(
+            "Plan de vente"
+        )
+        stock_plan.style.set_table_attributes("style='display:inline'").set_caption(
+            "Plan de stock"
+        )
+        display(production_plan)
+        display(vendu_plan)
+        display(stock_plan)
