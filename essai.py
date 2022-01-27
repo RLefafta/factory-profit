@@ -10,7 +10,7 @@ class Model:
         self.mois = parameters.mois
         self.produits = parameters.produits
 
-    def _creation_variable_decision(self, invente_max: int):
+    def _creation_variable_decision(self, invente_max: int = parameters.invente_max):
         self.variable_production = LpVariable.dicts(
             "production", (self.mois, self.produits), 0, cat="Integer"
         )
@@ -23,7 +23,11 @@ class Model:
             "stock", (self.mois, self.produits), 0, invente_max, cat="Integer"
         )
 
-    def _fonction_objectif(self, profit: dict, cout_stockage: int):
+    def _fonction_objectif(
+        self,
+        profit: dict = parameters.profit,
+        cout_stockage: int = parameters.cout_stockage,
+    ):
         self.model += lpSum(
             [
                 profit[produit] * self.variable_vendu[m][produit]
@@ -32,9 +36,8 @@ class Model:
                 for m in self.mois
             ]
         )
-        return self.model
 
-    def _vente_max_mois(self, ventes_max: dict):
+    def _vente_max_mois(self, ventes_max: dict = parameters.ventes_max):
         """
         Vente maximum par mois pour chaques produits
         """
@@ -70,7 +73,7 @@ class Model:
                         + self.variable_stock[m][produit]
                     )
 
-    def _objectif_stock(self, objectif_stock: int):
+    def _objectif_stock(self, objectif_stock: int = parameters.objectif_stock):
         """
         Objectif de stock pour la fin de l'exercice
         """
@@ -79,11 +82,11 @@ class Model:
 
     def _contrainte_machines(
         self,
-        machines: list,
-        temps_utilisation: dict,
-        heures_travaille: str,
-        machines_dispo: dict,
-        maintenance: dict,
+        machines: list = parameters.machines,
+        temps_utilisation: dict = parameters.temps_utilisation,
+        heures_travaille: str = parameters.heures_travaille,
+        machines_dispo: dict = parameters.machines_dispo,
+        maintenance: dict = parameters.maintenance,
     ):
         """
         Contrainte d'utilisation des machines
