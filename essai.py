@@ -5,6 +5,49 @@ from IPython.display import display
 
 
 class Model:
+    """
+    Une classe permettant de résoudre le problème de maximisation de profit
+
+    ...
+
+    Methods
+    -------
+    _creation_variable_decision()
+        Crée les variables production, vente et stock
+
+    _fonction_objectif()
+        Crée la fonction objectif
+
+    _vente_max_mois()
+        Vente maximum par mois pour chaques produits
+
+    _balance_initial()
+        Balance pour le premier mois
+
+    _balance()
+        Balance pour les autres mois
+
+    _objectif_stock()
+        Objectif de stock pour la fin de l'exercice
+
+    _contrainte_machines()
+        Contrainte d'utilisation des machines
+
+    _creation_contrainte()
+        Ajout des différentes contraintes à notre modèle
+
+    _resolve()
+        Résous le problème d'optimisation
+
+    gain()
+        Indique le profit réalisé sur l'exercice
+
+    affichage()
+        Affichage profit + tableaux affichant pour chaque mois et chaque produits la production, la vente et le stock.
+
+
+    """
+
     def __init__(self):
         self.model = LpProblem(name="planning_usine", sense=LpMaximize)
         self.mois = parameters.mois
@@ -113,17 +156,17 @@ class Model:
         self._objectif_stock()
         self._contrainte_machines()
 
-    def _resultat(self):
+    def _resolve(self):
         """
         Résous le problème d'optimisation
         """
         self.model.solve()
 
-    def _gain(self):
+    def gain(self):
         """
         Indique le profit réalisé sur l'exercice
         """
-        self._resultat()
+        self._resolve()
         if self.model.status == LpStatusOptimal:
             print("Le profit total est de {}".format(value(self.model.objective)))
         else:
@@ -133,7 +176,7 @@ class Model:
         """
         Affichage profit + tableaux affichant pour chaque mois et chaque produits la production, la vente et le stock.
         """
-        self._gain()
+        self.gain()
         ligne = self.mois.copy()
         colonne = self.produits.copy()
         production_plan = pd.DataFrame(columns=colonne, index=ligne, data=0.0)

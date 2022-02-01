@@ -1,1 +1,3 @@
 # factory-profit
+
+L'idée de ce projet est de maximiser le profit d'une usine selon différentes contraintes. A venir...
